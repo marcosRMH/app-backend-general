@@ -1,0 +1,1 @@
+export { ResponseMapper } from './response.mapper';

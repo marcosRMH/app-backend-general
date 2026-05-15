@@ -1,0 +1,25 @@
+{
+  "name": "cdk",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "generate:openapi": "cd .. && npm run generate:openapi && cd cdk",
+    "deploy": "npm run generate:openapi && cdk deploy",
+    "synth": "npm run generate:openapi && cdk synth",
+    "destroy": "cdk destroy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.180.0",
+    "constructs": "^10.4.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
+    "@types/node": "^22.0.0",
+    "aws-cdk": "^2.180.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0"
+  }
+}

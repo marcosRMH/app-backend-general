@@ -1,0 +1,1 @@
+export { ConfigRepositoryDynamoDb } from './config-repository.dynamodb';

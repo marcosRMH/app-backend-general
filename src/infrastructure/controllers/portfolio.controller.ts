@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Body, Headers, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, Headers, UsePipes, ValidationPipe, Inject } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { BadRequestException } from '@nestjs/common';
 import { validateOrReject } from 'class-validator';
@@ -11,7 +11,7 @@ import { XNamePortalHeaderDto } from '@application/dto/x-name-portal.header.dto'
 @ApiTags('Portfolio')
 @Controller('portfolio/send-message')
 export class PortfolioController {
-  constructor(private readonly service: PortfolioService) {}
+  constructor(@Inject(PortfolioService) private readonly service: PortfolioService) {}
    
    @Post()
      @UsePipes(new ValidationPipe({ whitelist: true }))
@@ -21,6 +21,7 @@ export class PortfolioController {
        @Headers('x-name-portal') portalHeader: string,
        @Body() dto: PortfolioSendMessageResponseDto
      ): Promise<ResponseDto> {
+      console.log("ENTRANDO AL CONTROLLER")
        const headerDto = plainToInstance(XNamePortalHeaderDto, { 'x-name-portal': portalHeader });
        await validateOrReject(headerDto)
          .catch((errors) => {

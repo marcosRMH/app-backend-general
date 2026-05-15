@@ -107,3 +107,5 @@ curl https://xxxxxxxx.execute-api.us-east-1.amazonaws.com/orders
 - Para agregar una nueva Lambda: crear entidades/repositorios en `domain/`, servicios/DTOs en `application/`, y controlador/modulo/handler en `infrastructure/`, luego registrar en el stack.
 - El API Gateway se construye desde `openapi.json`, generado con `npm run generate:openapi`.
 - `openapi.json` esta en `.gitignore`. Los comandos `npm run deploy` y `npm run synth` lo generan automaticamente.
+
+npx cdk deploy --hotswap --require-approval never

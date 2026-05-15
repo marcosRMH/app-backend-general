@@ -173,7 +173,6 @@ export class MailService {
   </div>
 
 `,
-
     });
     }
     catch(e){

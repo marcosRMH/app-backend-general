@@ -3,15 +3,18 @@ import * as fs from 'fs';
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import { Runtime } from 'aws-cdk-lib/aws-lambda';
+import { Runtime, CfnPermission } from 'aws-cdk-lib/aws-lambda';
 import { CfnApi, CfnStage, CfnRoute, CfnIntegration } from 'aws-cdk-lib/aws-apigatewayv2';
 
 export class AppBackendGeneralStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    const projectRoot = path.join(__dirname, '..', '..');
+
     const generalHandler = new NodejsFunction(this, 'GeneralHandler', {
-      entry: path.join(__dirname, '..', '..', 'src', 'infrastructure', 'lambda', 'handler.ts'),
+      entry: path.join(projectRoot, 'src', 'infrastructure', 'lambda', 'handler.ts'),
+      projectRoot,
       runtime: Runtime.NODEJS_22_X,
       memorySize: 512,
       timeout: cdk.Duration.seconds(29),
@@ -23,13 +26,22 @@ export class AppBackendGeneralStack extends cdk.Stack {
         target: 'node22',
         sourceMap: true,
         preCompilation: false,
-        tsconfig: path.join(__dirname, '..', '..', 'tsconfig.json'),
-        externalModules: ['@nestjs/microservices', '@nestjs/websockets'],
+        tsconfig: path.join(projectRoot, 'tsconfig.json'),
+        externalModules: ['@nestjs/microservices', '@nestjs/websockets', 'class-transformer'],
+        commandHooks: {
+          afterBundling: (_inputDir: string, outputDir: string) => [
+            `xcopy /E /I "${projectRoot}\\node_modules\\class-transformer" "${outputDir}\\node_modules\\class-transformer\\"`,
+          ],
+          beforeInstall: () => [],
+          beforeBundling: () => [],
+        },
       },
     });
 
     const portfolioHandler = new NodejsFunction(this, 'PortfolioHandler', {
-      entry: path.join(__dirname, '..', '..', 'src', 'infrastructure', 'lambda', 'handler.portfolio.ts'),
+      functionName: 'APPBACKENDPORTFOLIOV1',
+      entry: path.join(projectRoot, 'src', 'infrastructure', 'lambda', 'handler.portfolio.ts'),
+      projectRoot,
       runtime: Runtime.NODEJS_22_X,
       memorySize: 256,
       timeout: cdk.Duration.seconds(29),
@@ -40,8 +52,15 @@ export class AppBackendGeneralStack extends cdk.Stack {
         target: 'node22',
         sourceMap: true,
         preCompilation: false,
-        tsconfig: path.join(__dirname, '..', '..', 'tsconfig.json'),
-        externalModules: ['@nestjs/microservices', '@nestjs/websockets'],
+        tsconfig: path.join(projectRoot, 'tsconfig.json'),
+        externalModules: ['@nestjs/microservices', '@nestjs/websockets', 'class-transformer'],
+        commandHooks: {
+          afterBundling: (_inputDir: string, outputDir: string) => [
+            `xcopy /E /I "${projectRoot}\\node_modules\\class-transformer" "${outputDir}\\node_modules\\class-transformer\\"`,
+          ],
+          beforeInstall: () => [],
+          beforeBundling: () => [],
+        },
       },
     });
 
@@ -100,6 +119,20 @@ export class AppBackendGeneralStack extends cdk.Stack {
         });
       }
     }
+
+    new CfnPermission(this, 'GeneralHandlerPermission', {
+      action: 'lambda:InvokeFunction',
+      functionName: generalHandler.functionName,
+      principal: 'apigateway.amazonaws.com',
+      sourceArn: cdk.Fn.sub('arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiId}/*', { apiId: api.ref }),
+    });
+
+    new CfnPermission(this, 'PortfolioHandlerPermission', {
+      action: 'lambda:InvokeFunction',
+      functionName: portfolioHandler.functionName,
+      principal: 'apigateway.amazonaws.com',
+      sourceArn: cdk.Fn.sub('arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiId}/*', { apiId: api.ref }),
+    });
 
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: cdk.Fn.sub('https://${api}.execute-api.${AWS::Region}.amazonaws.com', { api: api.ref }),

@@ -3,7 +3,7 @@ import {
   DynamoDBDocumentClient,
   GetCommand
 } from '@aws-sdk/lib-dynamodb';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ConfigRepository } from '@domain/repositories/config-repository.interface';
 
@@ -12,7 +12,7 @@ export class ConfigRepositoryDynamoDb implements ConfigRepository {
   private readonly client: DynamoDBDocumentClient;
   private docClient: DynamoDBDocumentClient;
 
-  constructor(config: ConfigService) {
+  constructor(@Inject(ConfigService) config: ConfigService) {
     this.client = new DynamoDBClient({
       region: 'us-east-1'
     });

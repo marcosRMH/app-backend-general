@@ -17,5 +17,9 @@ export class PortfolioSendMessageResponseDto {
     @IsString()
     @IsNotEmpty()
     message!: string;
-    
+
+    @ApiProperty({ example: 'recaptcha-token-here' })
+    @IsString()
+    @IsNotEmpty()
+    recaptchaToken!: string;
 }

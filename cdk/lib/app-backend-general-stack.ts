@@ -47,6 +47,7 @@ export class AppBackendGeneralStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(29),
       environment: {
         NODE_ENV: 'production',
+        RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY || '',
       },
       bundling: {
         target: 'node22',

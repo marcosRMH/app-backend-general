@@ -1,14 +1,16 @@
-import { Controller, Get, Post, Delete, Param, Body, Headers, UsePipes, ValidationPipe, Inject } from '@nestjs/common';
+import { Controller, Post, Body, Headers, UsePipes, ValidationPipe, UseGuards, Inject } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { BadRequestException } from '@nestjs/common';
 import { validateOrReject } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
+import { RecaptchaGuard } from '@infrastructure/guards/recaptcha.guard';
 import { PortfolioService } from '@application/services/portfolio.service';
 import { ResponseDto } from '@application/dto/response.dto';
 import { PortfolioSendMessageResponseDto } from '@application/dto/portfolio-send-message.dto';
 import { XNamePortalHeaderDto } from '@application/dto/x-name-portal.header.dto';
 
 @ApiTags('Portfolio')
+@UseGuards(RecaptchaGuard)
 @Controller('portfolio/send-message')
 export class PortfolioController {
   constructor(@Inject(PortfolioService) private readonly service: PortfolioService) {}

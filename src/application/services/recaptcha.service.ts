@@ -1,6 +1,5 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
+import axios from 'axios';
 
 interface RecaptchaResponse {
   success: boolean;
@@ -16,10 +15,6 @@ export class RecaptchaService {
   private readonly secretKey: string = process.env.RECAPTCHA_SECRET_KEY || '';
   private readonly minScore: number = 0.5;
 
-  constructor(
-    private readonly httpService: HttpService,
-  ) {}
-
   async verifyToken(token: string): Promise<boolean> {
     if (!this.secretKey) {
       throw new HttpException('reCAPTCHA no configurado', HttpStatus.INTERNAL_SERVER_ERROR);
@@ -30,12 +25,10 @@ export class RecaptchaService {
       response: token,
     });
 
-    const { data } = await firstValueFrom(
-      this.httpService.post<RecaptchaResponse>(
-        'https://www.google.com/recaptcha/api/siteverify',
-        payload.toString(),
-        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
-      ),
+    const { data } = await axios.post<RecaptchaResponse>(
+      'https://www.google.com/recaptcha/api/siteverify',
+      payload.toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
     );
 
     if (!data.success) {

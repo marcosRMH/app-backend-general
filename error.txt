@@ -1,0 +1,23 @@
+[31m[Nest] 2 - [39m05/16/2026, 2:10:39 AM [31m ERROR[39m [38;5;3m[_ExceptionHandler] [39mTypeError: Cannot read properties of undefined (reading 'get')
+
+at new RecaptchaService [90m(/var/task/[39mindex.js:155342:41[90m)[39m
+2026-05-16T02:10:39.525Z
+at Injector.instantiateClass [90m(/var/task/[39mindex.js:39306:123[90m)[39m
+2026-05-16T02:10:39.525Z
+at callback [90m(/var/task/[39mindex.js:39019:41[90m)[39m
+2026-05-16T02:10:39.525Z
+at async Injector.resolveConstructorParams [90m(/var/task/[39mindex.js:39099:23[90m)[39m
+2026-05-16T02:10:39.525Z
+at async Injector.loadInstance [90m(/var/task/[39mindex.js:39024:11[90m)[39m
+2026-05-16T02:10:39.525Z
+at async Injector.loadProvider [90m(/var/task/[39mindex.js:39051:9[90m)[39m
+2026-05-16T02:10:39.525Z
+at async [90m/var/task/[39mindex.js:44534:11
+2026-05-16T02:10:39.525Z
+at async Promise.all (index 4)
+2026-05-16T02:10:39.525Z
+at async _InstanceLoader.createInstancesOfProviders [90m(/var/task/[39mindex.js:44533:9[90m)[39m
+2026-05-16T02:10:39.525Z
+at async [90m/var/task/[39mindex.js:44519:11
+2026-05-16T02:10:39.628Z
+END RequestId: ff34e328-d1df-46b9-9e2d-29304dc28144

@@ -1,6 +1,5 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 
 interface RecaptchaResponse {
@@ -14,15 +13,12 @@ interface RecaptchaResponse {
 
 @Injectable()
 export class RecaptchaService {
-  private readonly secretKey: string;
+  private readonly secretKey: string = process.env.RECAPTCHA_SECRET_KEY || '';
   private readonly minScore: number = 0.5;
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
-  ) {
-    this.secretKey = this.configService.get<string>('app.recaptchaSecretKey') || '';
-  }
+  ) {}
 
   async verifyToken(token: string): Promise<boolean> {
     if (!this.secretKey) {

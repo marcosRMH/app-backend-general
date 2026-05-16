@@ -3,7 +3,7 @@ import { RecaptchaService } from '@application/services/recaptcha.service';
 
 @Injectable()
 export class RecaptchaGuard implements CanActivate {
-  constructor(private readonly recaptchaService: RecaptchaService) {}
+  private readonly recaptchaService = new RecaptchaService();
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();

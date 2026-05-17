@@ -2,6 +2,16 @@
 
 NestJS backend con arquitectura hexagonal, preparado para desplegar en AWS Lambda mediante CDK.
 
+## Endpoints
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/health` | Health check del servicio |
+| `POST` | `/portfolio/send-message` | Envía un mensaje desde el portal |
+| `GET` | `/portfolio/multilanguage/:type` | Obtiene configuración por tipo (ej: idioma) |
+
+> La especificación OpenAPI completa se encuentra en `cdk/openapi.json`.
+
 ## Arquitectura Hexagonal
 
 ```

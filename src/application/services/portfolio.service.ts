@@ -15,16 +15,28 @@ export class PortfolioService {
 
   async sendMessage(portal: string, dto: PortfolioSendMessageResponseDto): Promise<ResponseDto> {
     try {
-      const configDynamoPortal = await this.repositoryDynamoConfig.findById(portal);
+      //const configDynamoPortal = await this.repositoryDynamoConfig.findById(portal);
       //const mail = new MailService();
       const phoneStr = dto.phone !== undefined ? dto.phone.toString() : '';
       const snsService = new SNSService();
-      const snsSendMessage = await snsService.publishMessage(configDynamoPortal.CORREO_CONFIG.arnSns,`La persona con el correo ${dto.email} y el telefono ${phoneStr} en caso tenga te envio este mensaje desde el portafolio ${dto.message}`);
+      const snsSendMessage = await snsService.publishMessage(process.env.ARN_SNS || '',`La persona con el correo ${dto.email} y el telefono ${phoneStr} en caso tenga te envio este mensaje desde el portafolio ${dto.message}`);
       //await mail.sendMail(configDynamoPortal.CORREO_CONFIG.email, configDynamoPortal.CORREO_CONFIG.password, configDynamoPortal.CORREO_CONFIG.to, dto.message, configDynamoPortal.CORREO_CONFIG.subjectPortfolio, "", phoneStr, dto.email);
       return ResponseMapper.toResponse({ code: 200, detail: [], message: snsSendMessage.MessageId?.toString() || '', status: "ok" });
     } catch (e) {
       console.log(e);
       return ResponseMapper.toResponse({ code: 500, detail: [], message: "", status: "ok" });
     }
+  }
+
+  async getMultilanguage(portal: string, type: string): Promise<ResponseDto> {
+    const configDynamoPortal = await this.repositoryDynamoConfig.findById(portal);
+    const multiLanguage = configDynamoPortal.MULTI_IDIOMA;
+    const configCapcha = configDynamoPortal.CONFIG_CAPCHA;
+    const responseMulilanguage = {
+      configRecapcha: configCapcha,
+      aboutMe: multiLanguage.aboutMe,
+      habilities: multiLanguage.habilities
+    }
+    return ResponseMapper.toResponse({ code: 200, detail: [], message: "", status: "ok", data: responseMulilanguage });
   }
 }

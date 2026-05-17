@@ -13,5 +13,8 @@ export class ResponseDto {
     
     @ApiProperty({ example: "[]" })
         detail!: string[];
+
+    @ApiProperty({ required: false })
+        data?: any;
     
 }

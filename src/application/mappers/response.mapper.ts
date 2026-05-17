@@ -8,6 +8,7 @@ export class ResponseMapper {
     dto.detail = response.detail;
     dto.message = response.message;
     dto.status = response.status;
+    dto.data = response?.data;
     return dto;
   }
 }

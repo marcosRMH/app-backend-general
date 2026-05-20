@@ -35,7 +35,10 @@ export class PortfolioService {
     const responseMulilanguage = {
       configRecapcha: configCapcha,
       aboutMe: multiLanguage.aboutMe,
-      habilities: multiLanguage.habilities
+      habilities: multiLanguage.habilities,
+      titles: multiLanguage.titles,
+      carrousel: multiLanguage.carrousel,
+      experience: multiLanguage.experience
     }
     return ResponseMapper.toResponse({ code: 200, detail: [], message: "", status: "ok", data: responseMulilanguage });
   }

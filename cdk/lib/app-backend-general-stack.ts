@@ -12,6 +12,21 @@ export class AppBackendGeneralStack extends cdk.Stack {
 
     const projectRoot = path.join(__dirname, '..', '..');
 
+    const bundlingConfig = {
+      target: 'node22' as const,
+      sourceMap: true,
+      preCompilation: false,
+      tsconfig: path.join(projectRoot, 'tsconfig.json'),
+      externalModules: ['@nestjs/microservices', '@nestjs/websockets', 'class-transformer'],
+      commandHooks: {
+        afterBundling: (_inputDir: string, outputDir: string) => [
+          `xcopy /E /I "${projectRoot}\\node_modules\\class-transformer" "${outputDir}\\node_modules\\class-transformer\\"`,
+        ],
+        beforeInstall: () => [],
+        beforeBundling: () => [],
+      },
+    };
+
     const generalHandler = new NodejsFunction(this, 'GeneralHandler', {
       entry: path.join(projectRoot, 'src', 'infrastructure', 'lambda', 'handler.ts'),
       projectRoot,
@@ -22,20 +37,7 @@ export class AppBackendGeneralStack extends cdk.Stack {
         NODE_ENV: 'production',
         DYNAMODB_TABLE: 'Items',
       },
-      bundling: {
-        target: 'node22',
-        sourceMap: true,
-        preCompilation: false,
-        tsconfig: path.join(projectRoot, 'tsconfig.json'),
-        externalModules: ['@nestjs/microservices', '@nestjs/websockets', 'class-transformer'],
-        commandHooks: {
-          afterBundling: (_inputDir: string, outputDir: string) => [
-            `xcopy /E /I "${projectRoot}\\node_modules\\class-transformer" "${outputDir}\\node_modules\\class-transformer\\"`,
-          ],
-          beforeInstall: () => [],
-          beforeBundling: () => [],
-        },
-      },
+      bundling: bundlingConfig,
     });
 
     const portfolioHandler = new NodejsFunction(this, 'PortfolioHandler', {
@@ -49,33 +51,37 @@ export class AppBackendGeneralStack extends cdk.Stack {
         NODE_ENV: 'production',
         RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY || '',
       },
-      bundling: {
-        target: 'node22',
-        sourceMap: true,
-        preCompilation: false,
-        tsconfig: path.join(projectRoot, 'tsconfig.json'),
-        externalModules: ['@nestjs/microservices', '@nestjs/websockets', 'class-transformer'],
-        commandHooks: {
-          afterBundling: (_inputDir: string, outputDir: string) => [
-            `xcopy /E /I "${projectRoot}\\node_modules\\class-transformer" "${outputDir}\\node_modules\\class-transformer\\"`,
-          ],
-          beforeInstall: () => [],
-          beforeBundling: () => [],
-        },
+      bundling: bundlingConfig,
+    });
+
+    const identityLoginHandler = new NodejsFunction(this, 'IdentityLoginHandler', {
+      functionName: 'IDENTITY_LOGIN',
+      entry: path.join(projectRoot, 'src', 'infrastructure', 'lambda', 'handler.identity-login.ts'),
+      projectRoot,
+      runtime: Runtime.NODEJS_22_X,
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(29),
+      environment: {
+        NODE_ENV: 'production',
+        COGNITO_USER_POOL_ID: process.env.COGNITO_USER_POOL_ID || '',
+        COGNITO_CLIENT_ID: process.env.COGNITO_CLIENT_ID || '',
       },
+      bundling: bundlingConfig,
     });
 
     const specPath = path.join(__dirname, '..', 'openapi.json');
     const spec = JSON.parse(fs.readFileSync(specPath, 'utf-8'));
 
+    const corsConfig = {
+      allowOrigins: ['*'],
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowHeaders: ['*'],
+    };
+
     const api = new CfnApi(this, 'AppApi', {
       name: 'app-backend-general',
       protocolType: 'HTTP',
-      corsConfiguration: {
-        allowOrigins: ['*'],
-        allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowHeaders: ['*'],
-      },
+      corsConfiguration: corsConfig,
     });
 
     new CfnStage(this, 'DefaultStage', {
@@ -84,40 +90,78 @@ export class AppBackendGeneralStack extends cdk.Stack {
       autoDeploy: true,
     });
 
+    const identityApi = new CfnApi(this, 'IdentityApi', {
+      name: 'identity-login',
+      protocolType: 'HTTP',
+      corsConfiguration: corsConfig,
+    });
+
+    new CfnStage(this, 'IdentityStage', {
+      apiId: identityApi.ref,
+      stageName: '$default',
+      autoDeploy: true,
+    });
+
     const seenInts = new Map<string, CfnIntegration>();
+    const identitySeenInts = new Map<string, CfnIntegration>();
 
     for (const [pathExpr, methods] of Object.entries(spec.paths)) {
       for (const [httpMethod] of Object.entries(methods as Record<string, any>)) {
-        let handler;
+        const isAuth = pathExpr.startsWith('/auth');
 
-        if (pathExpr.startsWith('/portfolio')) {
-          handler = portfolioHandler;
+        if (isAuth) {
+          const intKey = identityLoginHandler.node.id;
+
+          if (!identitySeenInts.has(intKey)) {
+            identitySeenInts.set(intKey, new CfnIntegration(this, `Identity${intKey}Integration`, {
+              apiId: identityApi.ref,
+              integrationType: 'AWS_PROXY',
+              integrationUri: cdk.Fn.sub(
+                'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${funcArn}/invocations',
+                { funcArn: identityLoginHandler.functionArn },
+              ),
+              payloadFormatVersion: '2.0',
+            }));
+          }
+
+          const integration = identitySeenInts.get(intKey)!;
+          const routeId = `IdentityRoute${pathExpr.replace(/[\/{}:]/g, '_')}_${httpMethod}`;
+          new CfnRoute(this, routeId, {
+            apiId: identityApi.ref,
+            routeKey: `${httpMethod.toUpperCase()} ${pathExpr}`,
+            target: `integrations/${integration.ref}`,
+          });
         } else {
-          handler = generalHandler;
-        }
+          let handler;
 
-        const intKey = handler.node.id;
+          if (pathExpr.startsWith('/portfolio')) {
+            handler = portfolioHandler;
+          } else {
+            handler = generalHandler;
+          }
 
-        if (!seenInts.has(intKey)) {
-          seenInts.set(intKey, new CfnIntegration(this, `${intKey}Integration`, {
+          const intKey = handler.node.id;
+
+          if (!seenInts.has(intKey)) {
+            seenInts.set(intKey, new CfnIntegration(this, `${intKey}Integration`, {
+              apiId: api.ref,
+              integrationType: 'AWS_PROXY',
+              integrationUri: cdk.Fn.sub(
+                'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${funcArn}/invocations',
+                { funcArn: handler.functionArn },
+              ),
+              payloadFormatVersion: '2.0',
+            }));
+          }
+
+          const integration = seenInts.get(intKey)!;
+          const routeId = `Route${pathExpr.replace(/[\/{}:]/g, '_')}_${httpMethod}`;
+          new CfnRoute(this, routeId, {
             apiId: api.ref,
-            integrationType: 'AWS_PROXY',
-            integrationUri: cdk.Fn.sub(
-              'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${funcArn}/invocations',
-              { funcArn: handler.functionArn },
-            ),
-            payloadFormatVersion: '2.0',
-          }));
+            routeKey: `${httpMethod.toUpperCase()} ${pathExpr}`,
+            target: `integrations/${integration.ref}`,
+          });
         }
-
-        const integration = seenInts.get(intKey)!;
-
-        const routeId = `Route${pathExpr.replace(/[\/{}:]/g, '_')}_${httpMethod}`;
-        new CfnRoute(this, routeId, {
-          apiId: api.ref,
-          routeKey: `${httpMethod.toUpperCase()} ${pathExpr}`,
-          target: `integrations/${integration.ref}`,
-        });
       }
     }
 
@@ -135,8 +179,19 @@ export class AppBackendGeneralStack extends cdk.Stack {
       sourceArn: cdk.Fn.sub('arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiId}/*', { apiId: api.ref }),
     });
 
+    new CfnPermission(this, 'IdentityLoginHandlerPermission', {
+      action: 'lambda:InvokeFunction',
+      functionName: identityLoginHandler.functionName,
+      principal: 'apigateway.amazonaws.com',
+      sourceArn: cdk.Fn.sub('arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiId}/*', { apiId: identityApi.ref }),
+    });
+
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: cdk.Fn.sub('https://${api}.execute-api.${AWS::Region}.amazonaws.com', { api: api.ref }),
+    });
+
+    new cdk.CfnOutput(this, 'IdentityApiUrl', {
+      value: cdk.Fn.sub('https://${api}.execute-api.${AWS::Region}.amazonaws.com', { api: identityApi.ref }),
     });
 
     new cdk.CfnOutput(this, 'GeneralLambda', {
@@ -145,6 +200,10 @@ export class AppBackendGeneralStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'PortfolioLambda', {
       value: portfolioHandler.functionName,
+    });
+
+    new cdk.CfnOutput(this, 'IdentityLoginLambda', {
+      value: identityLoginHandler.functionName,
     });
   }
 }

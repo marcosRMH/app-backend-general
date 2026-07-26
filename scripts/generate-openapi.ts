@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from '../src/infrastructure/modules/app.module';
 import { PortfolioModule } from '../src/infrastructure/modules/portfolio.module';
+import { AuthModule } from '../src/infrastructure/modules/auth.module';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -19,13 +20,18 @@ async function generate() {
   const portfolioDoc = SwaggerModule.createDocument(portfolioApp, config);
   await portfolioApp.close();
 
+  const authApp = await NestFactory.create(AuthModule);
+  const authDoc = SwaggerModule.createDocument(authApp, config);
+  await authApp.close();
+
   const merged = {
     ...document,
-    paths: { ...document.paths, ...portfolioDoc.paths },
+    paths: { ...document.paths, ...portfolioDoc.paths, ...authDoc.paths },
     components: {
       schemas: {
         ...(document.components?.schemas || {}),
         ...(portfolioDoc.components?.schemas || {}),
+        ...(authDoc.components?.schemas || {}),
       },
     },
   };

@@ -3,7 +3,6 @@ import { PortfolioSendMessageResponseDto } from '@application/dto/portfolio-send
 import { ResponseMapper } from '@application/mappers/response.mapper';
 import { ResponseDto } from '@application/dto/response.dto';
 import { ConfigRepository } from '@domain/repositories/config-repository.interface';
-import { MailService } from '@application/commons/send-email.util';
 import { SNSService } from '@application/commons/sns-helper.util';
 
 @Injectable()

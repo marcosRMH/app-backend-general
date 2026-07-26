@@ -109,3 +109,29 @@ curl https://xxxxxxxx.execute-api.us-east-1.amazonaws.com/orders
 - `openapi.json` esta en `.gitignore`. Los comandos `npm run deploy` y `npm run synth` lo generan automaticamente.
 
 npx cdk deploy --hotswap --require-approval never
+
+
+Arquitectura para el proyecto de esta repo
+                Cuenta A  (REPO : APP-BACKEND-GENERAL)
+        ------------------------
+        Amazon Cognito
+             │
+     Login usuario
+             │
+             ▼
+        JWT (Access Token)
+             │
+             │ Authorization: Bearer <JWT>
+             ▼
+──────────────────────────────────────────────
+             │
+             ▼
+                 Cuenta B (UNIDAD DE NEGOCIO)
+        ------------------------
+        API Gateway
+        o Backend (Java/NestJS)
+             │
+      Valida el JWT
+             │
+             ▼
+       Ejecuta la lógica de negocio

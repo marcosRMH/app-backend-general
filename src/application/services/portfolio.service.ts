@@ -38,7 +38,8 @@ export class PortfolioService {
       habilities: multiLanguage.habilities,
       titles: multiLanguage.titles,
       carrousel: multiLanguage.carrousel,
-      experience: multiLanguage.experience
+      experience: multiLanguage.experience,
+      projects: multiLanguage.projects
     }
     return ResponseMapper.toResponse({ code: 200, detail: [], message: "", status: "ok", data: responseMulilanguage });
   }

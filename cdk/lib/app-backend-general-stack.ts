@@ -50,6 +50,8 @@ export class AppBackendGeneralStack extends cdk.Stack {
       environment: {
         NODE_ENV: 'production',
         RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY || '',
+        TABLE_CONFIG: process.env.TABLE_CONFIG || 'CONFIG_PORTALS',
+        ARN_SNS: process.env.ARN_SNS || 'arn:aws:sns:us-east-1:632320832385:notiicationPortfolioMRMH'
       },
       bundling: bundlingConfig,
     });
@@ -57,6 +59,21 @@ export class AppBackendGeneralStack extends cdk.Stack {
     const identityLoginHandler = new NodejsFunction(this, 'IdentityLoginHandler', {
       functionName: 'IDENTITY_LOGIN',
       entry: path.join(projectRoot, 'src', 'infrastructure', 'lambda', 'handler.identity-login.ts'),
+      projectRoot,
+      runtime: Runtime.NODEJS_22_X,
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(29),
+      environment: {
+        NODE_ENV: 'production',
+        COGNITO_USER_POOL_ID: process.env.COGNITO_USER_POOL_ID || '',
+        COGNITO_CLIENT_ID: process.env.COGNITO_CLIENT_ID || '',
+      },
+      bundling: bundlingConfig,
+    });
+
+    const adminUsersHandler = new NodejsFunction(this, 'AdminUsersHandler', {
+      functionName: 'ADMIN_USERS',
+      entry: path.join(projectRoot, 'src', 'infrastructure', 'lambda', 'handler.admin-users.ts'),
       projectRoot,
       runtime: Runtime.NODEJS_22_X,
       memorySize: 256,
@@ -102,12 +119,26 @@ export class AppBackendGeneralStack extends cdk.Stack {
       autoDeploy: true,
     });
 
+    const adminApi = new CfnApi(this, 'AdminApi', {
+      name: 'admin-users',
+      protocolType: 'HTTP',
+      corsConfiguration: corsConfig,
+    });
+
+    new CfnStage(this, 'AdminStage', {
+      apiId: adminApi.ref,
+      stageName: '$default',
+      autoDeploy: true,
+    });
+
     const seenInts = new Map<string, CfnIntegration>();
     const identitySeenInts = new Map<string, CfnIntegration>();
+    const adminSeenInts = new Map<string, CfnIntegration>();
 
     for (const [pathExpr, methods] of Object.entries(spec.paths)) {
       for (const [httpMethod] of Object.entries(methods as Record<string, any>)) {
         const isAuth = pathExpr.startsWith('/auth');
+        const isUser = pathExpr.startsWith('/user');
 
         if (isAuth) {
           const intKey = identityLoginHandler.node.id;
@@ -128,6 +159,28 @@ export class AppBackendGeneralStack extends cdk.Stack {
           const routeId = `IdentityRoute${pathExpr.replace(/[\/{}:]/g, '_')}_${httpMethod}`;
           new CfnRoute(this, routeId, {
             apiId: identityApi.ref,
+            routeKey: `${httpMethod.toUpperCase()} ${pathExpr}`,
+            target: `integrations/${integration.ref}`,
+          });
+        } else if (isUser) {
+          const intKey = adminUsersHandler.node.id;
+
+          if (!adminSeenInts.has(intKey)) {
+            adminSeenInts.set(intKey, new CfnIntegration(this, `Admin${intKey}Integration`, {
+              apiId: adminApi.ref,
+              integrationType: 'AWS_PROXY',
+              integrationUri: cdk.Fn.sub(
+                'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${funcArn}/invocations',
+                { funcArn: adminUsersHandler.functionArn },
+              ),
+              payloadFormatVersion: '2.0',
+            }));
+          }
+
+          const integration = adminSeenInts.get(intKey)!;
+          const routeId = `AdminRoute${pathExpr.replace(/[\/{}:]/g, '_')}_${httpMethod}`;
+          new CfnRoute(this, routeId, {
+            apiId: adminApi.ref,
             routeKey: `${httpMethod.toUpperCase()} ${pathExpr}`,
             target: `integrations/${integration.ref}`,
           });
@@ -186,12 +239,23 @@ export class AppBackendGeneralStack extends cdk.Stack {
       sourceArn: cdk.Fn.sub('arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiId}/*', { apiId: identityApi.ref }),
     });
 
+    new CfnPermission(this, 'AdminUsersHandlerPermission', {
+      action: 'lambda:InvokeFunction',
+      functionName: adminUsersHandler.functionName,
+      principal: 'apigateway.amazonaws.com',
+      sourceArn: cdk.Fn.sub('arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiId}/*', { apiId: adminApi.ref }),
+    });
+
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: cdk.Fn.sub('https://${api}.execute-api.${AWS::Region}.amazonaws.com', { api: api.ref }),
     });
 
     new cdk.CfnOutput(this, 'IdentityApiUrl', {
       value: cdk.Fn.sub('https://${api}.execute-api.${AWS::Region}.amazonaws.com', { api: identityApi.ref }),
+    });
+
+    new cdk.CfnOutput(this, 'AdminApiUrl', {
+      value: cdk.Fn.sub('https://${api}.execute-api.${AWS::Region}.amazonaws.com', { api: adminApi.ref }),
     });
 
     new cdk.CfnOutput(this, 'GeneralLambda', {
@@ -204,6 +268,10 @@ export class AppBackendGeneralStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'IdentityLoginLambda', {
       value: identityLoginHandler.functionName,
+    });
+
+    new cdk.CfnOutput(this, 'AdminUsersLambda', {
+      value: adminUsersHandler.functionName,
     });
   }
 }

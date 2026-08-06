@@ -22,7 +22,7 @@ Cada unidad de negocio (portfolio, etc.) mantiene su propio repo con su lógica 
 | Handler | Módulo | API Gateway | Responsabilidad |
 |---------|--------|-------------|-----------------|
 | `handler.identity-login.ts` | `AuthModule` | `IdentityApi` (propio) | Login, refresh tokens, logout |
-| `handler.user.ts` | `UserModule` | `AppApi` (general) | CRUD usuarios, roles, permisos (superuser only) |
+| `handler.admin-users.ts` | `UserModule` | `AdminApi` (propio) | CRUD usuarios, roles, permisos |
 | `handler.portfolio.ts` | `PortfolioModule` | `AppApi` (general) | Lógica de portfolio (envío de mensajes, multilanguage) |
 | `handler.ts` (general) | `AppModule` | `AppApi` (general) | Health check, rutas generales |
 
@@ -36,16 +36,16 @@ Cada unidad de negocio (portfolio, etc.) mantiene su propio repo con su lógica 
 | `POST` | `/auth/refresh` | Refresh token → nuevos tokens | Refresh Token |
 | `POST` | `/auth/logout` | Invalida sesión | Access Token |
 
-#### User Management (UserModule)
+#### User Management (UserModule) — AdminApi
 
 | Método | Ruta | Descripción | Auth |
 |--------|------|-------------|------|
-| `POST` | `/users` | Crear usuario en Cognito | Superuser |
-| `GET` | `/users` | Listar usuarios | Superuser |
-| `GET` | `/users/:id` | Obtener usuario por ID | Superuser |
-| `PUT` | `/users/:id` | Actualizar perfil de usuario | Superuser / Self |
-| `PUT` | `/users/:id/role` | Asignar/modificar rol | Superuser |
-| `POST` | `/users/:id/reset-password` | Resetear contraseña | Superuser |
+| `POST` | `/user` | Crear usuario en Cognito | Bearer + `x-id-token` |
+| `GET` | `/user` | Listar usuarios | Bearer + `x-id-token` |
+| `GET` | `/user/:id` | Obtener usuario por ID | Bearer + `x-id-token` |
+| `PUT` | `/user/:id` | Actualizar perfil de usuario | Bearer + `x-id-token` |
+| `PUT` | `/user/:id/role` | Asignar/modificar rol | Bearer + `x-id-token` |
+| `POST` | `/user/:id/reset-password` | Resetear contraseña | Bearer + `x-id-token` |
 
 #### Portfolio (PortfolioModule) — existente
 
@@ -82,6 +82,78 @@ Cada unidad de negocio (portfolio, etc.) mantiene su propio repo con su lógica 
 | Actualizar usuario cualquiera | ✅ | ❌ |
 | Asignar roles | ✅ | ❌ |
 | Resetear contraseñas | ✅ | ❌ |
+
+---
+
+## Tokens (JWT)
+
+El `POST /auth/login` devuelve tres tokens firmados por Cognito (RS256). La firma se valida contra el **JWKS público del User Pool**, accesible en:
+
+```
+https://cognito-idp.<region>.amazonaws.com/<userPoolId>/.well-known/jwks.json
+```
+
+Por ser llaves públicas, **cualquier servicio en cualquier cuenta AWS** puede verificar la firma (solo necesita `userPoolId` y `clientId`), sin trust de IAM entre cuentas.
+
+| Token | `token_use` | Contiene | Uso |
+|-------|-------------|----------|-----|
+| `accessToken` | `access` | `sub`, `username`, `cognito:groups`, `exp`, ... | Autenticar APIs (Bearer). **No** incluye custom attributes |
+| `idToken` | `id` | `sub`, `email`, `cognito:groups`, **custom attributes (`custom:*`)** | Identidad/rol del usuario |
+| `refreshToken` | — | Opaque | Renovar tokens en `/auth/refresh` |
+
+### Regla clave: dónde vive el rol
+
+- **`custom:role`** (custom attribute) → viaja **solo en el ID token**. Cognito no lo incluye en el access token.
+- **`cognito:groups`** → viaja en el access token **y** en el ID token.
+- El rol lo asigna Cognito al usuario (al crearlo/actualizarlo); **el front nunca lo envía por separado**, solo viaja dentro del token.
+
+---
+
+## Seguridad de las APIs
+
+### Guards
+
+| Guard | Qué hace |
+|-------|----------|
+| `AuthGuard` | Valida firma + expiración de los tokens contra el JWKS de Cognito (vía `aws-jwt-verify`). Adjunta el payload verificado en `request.user` |
+| `RoleGuard` | Exige que `request.user['custom:role']` exista y **no esté vacío** |
+| `RecaptchaGuard` | Valida token reCAPTCHA (portfolio) |
+
+### Requisitos por API
+
+| API | Rutas | Auth requerida |
+|-----|-------|----------------|
+| `IdentityApi` | `/auth/login` | Sin auth |
+| `IdentityApi` | `/auth/refresh` | Refresh token (body) |
+| `IdentityApi` | `/auth/logout` | Bearer access token |
+| `AdminApi` | `/user/*` | **Bearer access token + header `x-id-token`** |
+| `AppApi` | `/portfolio/*` | reCAPTCHA / header `x-name-portal` |
+| `AppApi` | `/health` | Sin auth |
+
+### AdminApi (`/user/*`) — ambos tokens obligatorios
+
+```
+Authorization: Bearer <accessToken>
+x-id-token: <idToken>
+```
+
+El `AuthGuard` en `/user/*`:
+1. Valida el **access token** (Bearer) contra el JWKS (`tokenUse: 'access'`).
+2. Valida el **ID token** del header `x-id-token` (`tokenUse: 'id'`).
+3. Verifica que ambos tokens pertenezcan al **mismo usuario** (`sub` idéntico). Si no → `401`.
+4. Pone el payload del **ID token** en `request.user` (de ahí sale el rol).
+
+Errores posibles:
+
+| Caso | Respuesta |
+|------|-----------|
+| Falta Bearer | `401 Token de autorización requerido` |
+| Falta `x-id-token` | `401 ID token requerido en el header x-id-token` |
+| Tokens de distintos usuarios | `401 Los tokens no pertenecen al mismo usuario` |
+| Tokens inválidos/expirados | `401 Token inválido o expirado` |
+| `custom:role` vacío o ausente | `403 El token debe contener un rol no vacío` |
+
+> La verificación de firma es portable a otras cuentas; el rol es política **local** de cada API consumidora.
 
 ---
 
@@ -245,10 +317,12 @@ src/
 - [x] Crear handler.identity-login.ts Lambda handler
 - [x] Agregar IdentityLoginHandler al CDK con API Gateway propio
 - [x] Actualizar script generate-openapi.ts para incluir AuthModule
-- [ ] Integrar AuthService con AWS Cognito (initiateAuth, refreshToken, globalSignOut)
+- [x] Integrar AuthService con AWS Cognito (initiateAuth, refreshToken, globalSignOut)
+- [x] Crear handler.admin-users.ts Lambda handler (ADMIN_USERS) con AdminApi propio
+- [x] Implementar AuthGuard (firma JWKS, access + id token) y RoleGuard (rol no vacío)
+- [x] Agregar AdminUsersHandler al CDK con API Gateway propio (AdminApi)
+- [x] Generar openapi.json con los nuevos endpoints
 - [ ] Crear Cognito User Pool + Client en CDK
-- [ ] Implementar UserModule (CRUD usuarios)
-- [ ] Implementar AuthGuard y RoleGuard
+- [ ] Implementar UserModule (CRUD usuarios reales con Cognito)
 - [ ] Adaptar PortfolioModule al nuevo esquema
-- [ ] Generar openapi.json con los nuevos endpoints
 - [ ] Tests unitarios y e2e

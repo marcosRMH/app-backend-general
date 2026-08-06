@@ -3,6 +3,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from '../src/infrastructure/modules/app.module';
 import { PortfolioModule } from '../src/infrastructure/modules/portfolio.module';
 import { AuthModule } from '../src/infrastructure/modules/auth.module';
+import { UserModule } from '../src/infrastructure/modules/user.module';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -12,6 +13,7 @@ async function generate() {
     .setTitle('App Backend General')
     .setDescription('API con arquitectura hexagonal')
     .setVersion('1.0')
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   await app.close();
@@ -24,14 +26,19 @@ async function generate() {
   const authDoc = SwaggerModule.createDocument(authApp, config);
   await authApp.close();
 
+  const userApp = await NestFactory.create(UserModule);
+  const userDoc = SwaggerModule.createDocument(userApp, config);
+  await userApp.close();
+
   const merged = {
     ...document,
-    paths: { ...document.paths, ...portfolioDoc.paths, ...authDoc.paths },
+    paths: { ...document.paths, ...portfolioDoc.paths, ...authDoc.paths, ...userDoc.paths },
     components: {
       schemas: {
         ...(document.components?.schemas || {}),
         ...(portfolioDoc.components?.schemas || {}),
         ...(authDoc.components?.schemas || {}),
+        ...(userDoc.components?.schemas || {}),
       },
     },
   };
